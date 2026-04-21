@@ -4,7 +4,8 @@ description: |
   Telegram Bot skill for sending and editing Telegram messages via Bot API.
   Use when Bub needs to: (1) Send a message to a Telegram user/group/channel,
   (2) Reply to a specific Telegram message with reply_to_message_id,
-  (3) Edit an existing Telegram message, or (4) Push proactive Telegram notifications.
+  (3) Edit an existing Telegram message, or (4) Push proactive Telegram notifications
+  when working outside an active Telegram session.
 metadata:
   channel: telegram
 ---
@@ -19,25 +20,17 @@ Assumption: `BUB_TELEGRAM_TOKEN` is already available.
 Collect these before execution:
 
 - `chat_id` (required)
-- `message_id` (required for edit or reply)
+- `message_id` (required for edit or reply when source is not a bot)
 - message content (required for send/edit)
-- `reply_to_message_id` (required when you need a threaded reply)
+- `reply_to_message_id` (required for threaded reply behavior)
 
 ## Execution Policy
 
-1. If handling a Telegram message and `message_id` is known, send a reply message with `--reply-to`.
-2. If there is no message to reply to, send a normal message to `chat_id`.
+1. If handling a direct user message in Telegram and `message_id` is known, send a reply message (`--reply-to`).
+2. If source metadata says sender is a bot (`sender_is_bot=true`), do not use reply mode, but send a normal message and prefix content with `@<sender_username>` (or the provided source username). If the user doesn't have a username, use `--source-user-id` to mention via `tg://user?id=` link.
 3. For long-running tasks, optionally send one progress message, then edit that same message for final status.
-4. **ALWAYS pass message content via stdin using heredoc pipe and `--message -` (or `--text -`).** NEVER embed message text directly in shell arguments — special characters like `'`, `"`, `$`, `!` will be mangled or cause syntax errors.
+4. For multi-line text, pass the content via heredoc command substitution instead of embedding raw line breaks in quoted strings.
 5. Avoid emitting HTML tags in message content; use Markdown for formatting instead.
-
-## Bot to co-Bot Communication
-
-In Telegram groups, communicate with another bot using only these patterns:
-
-1. Reply directly to the other bot's message when `message_id` is available.
-2. Use an explicit command mention such as `/command@OtherBot` when you need to invoke that bot intentionally.
-3. Do not assume free-form group text will reach another bot.
 
 ## Active Response Policy
 
@@ -75,24 +68,52 @@ But when any explanation or details are needed, use a normal reply instead.
 Paths are relative to this skill directory.
 
 ```bash
-# Send message (ALWAYS use heredoc stdin, never inline text in arguments)
-cat << 'EOF' | uv run ${SKILL_DIR}/scripts/telegram_send.py --chat-id <CHAT_ID> --message -
-Your message content here.
-Special characters are safe: $100, "quotes", 'apostrophes', !exclamation
-EOF
+# Load environment variables from .env first
+set -a; source .env 2>/dev/null || true; set +a
 
-# Reply to a specific message
-cat << 'EOF' | uv run ${SKILL_DIR}/scripts/telegram_send.py --chat-id <CHAT_ID> --reply-to <MESSAGE_ID> --message -
-Reply content here.
-EOF
+# Send simple text with SINGLE quotes
+uv run ${SKILL_DIR}/scripts/telegram_send.py \
+  --chat-id <CHAT_ID> \
+  --message '<TEXT>'
 
-# Edit an existing message
-cat << 'EOF' | uv run ${SKILL_DIR}/scripts/telegram_edit.py --chat-id <CHAT_ID> --message-id <MESSAGE_ID> --text -
-Updated content here.
+# Or, send multi-line message using heredoc and double quotes
+uv run ${SKILL_DIR}/scripts/telegram_send.py \
+  --chat-id <CHAT_ID> \
+  --message "$(cat <<'EOF'
+Build finished successfully.
+Summary:
+- 12 tests passed
+- 0 failures
 EOF
+)"
+
+# Send reply to a specific message
+uv run ${SKILL_DIR}/scripts/telegram_send.py \
+  --chat-id <CHAT_ID> \
+  --message '<TEXT>' \
+  --reply-to <MESSAGE_ID>
+
+# Source message sender is bot: no direct reply, use @username style
+uv run ${SKILL_DIR}/scripts/telegram_send.py \
+  --chat-id <CHAT_ID> \
+  --message '<TEXT>' \
+  --source-is-bot \
+  --source-username <USERNAME>
+
+# Source message sender is bot without username: use tg://user?id= link
+uv run ${SKILL_DIR}/scripts/telegram_send.py \
+  --chat-id <CHAT_ID> \
+  --message '<TEXT>' \
+  --source-is-bot \
+  --source-user-id <USER_ID> \
+  --source-display-name "Display Name"
+
+# Edit existing message
+uv run ${SKILL_DIR}/scripts/telegram_edit.py \
+  --chat-id <CHAT_ID> \
+  --message-id <MESSAGE_ID> \
+  --text '<TEXT>'
 ```
-
-When sending message to a bot, either use `--reply-to` argument or pass `--source-is-bot` with `--source-username` otherwise the bot will not receive the message.
 
 For other actions that not covered by these scripts, use `curl` to call Telegram Bot API directly with the provided token.
 
@@ -101,13 +122,17 @@ For other actions that not covered by these scripts, use `curl` to call Telegram
 ### `telegram_send.py`
 
 - `--chat-id`, `-c`: required, supports comma-separated ids
-- `--message`, `-m`: required (use `-` to read from stdin)
+- `--message`, `-m`: required
 - `--reply-to`, `-r`: optional
 - `--token`, `-t`: optional (normally not needed)
+- `--source-is-bot`: optional flag, disables reply mode and adds mention prefix
+- `--source-username`: optional, uses `@username` style mention when set
+- `--source-user-id`: optional, uses `tg://user?id=` link mention when username is not available
+- `--source-display-name`: optional, display name for user ID mention (defaults to "User")
 
 ### `telegram_edit.py`
 
 - `--chat-id`, `-c`: required
 - `--message-id`, `-m`: required
-- `--text`, `-t`: required (use `-` to read from stdin)
+- `--text`, `-t`: required
 - `--token`: optional (normally not needed)

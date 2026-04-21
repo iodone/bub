@@ -147,3 +147,4 @@ reference/
 backup/
 _version.py
 !website/src/lib/
+.alma-snapshots

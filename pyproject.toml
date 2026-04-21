@@ -1,6 +1,6 @@
 [project]
 name = "bub"
-dynamic = ["version"]
+version = "0.3.3"
 description = "A common shape for agents that live alongside people."
 authors = [
     { name = "Chojan Shang", email = "psiace@apache.org" },
@@ -33,7 +33,8 @@ dependencies = [
     "loguru>=0.7.2",
     "rapidfuzz>=3.14.3",
     "aiohttp>=3.13.3",
-    "httpx[socks]>=0.28.1",
+    "requests>=2.32.5",
+    "telegramify-markdown>=1.1.1",
 ]
 
 [project.urls]
@@ -56,21 +57,17 @@ dev = [
     "types-PyYAML>=6.0.12",
     "mypy>=0.991",
     "ruff>=0.11.5",
+    "mkdocs>=1.4.2",
+    "mkdocs-terminal>=4.7.0",
+    "mkdocstrings[python]>=0.26.1",
     "rust-just>=1.42.0",
     "prek>=0.3.1",
     "pytest-asyncio>=1.3.0",
 ]
 
 [build-system]
-requires = ["hatchling", "hatch-vcs"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
-
-[tool.hatch.version]
-source = "vcs"
-fallback-version = "0.3.0"
-
-[tool.hatch.build.hooks.vcs]
-version-file = "src/bub/_version.py"
 
 [tool.hatch.build.targets.sdist]
 only-include = ["src/bub", "src/skills", "tests"]
