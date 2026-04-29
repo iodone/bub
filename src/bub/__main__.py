@@ -12,17 +12,16 @@ from bub.framework import BubFramework
 def _instrument_bub() -> None:
     from loguru import logger
 
+    logger.remove()
+    logger.add(sys.stderr, colorize=True)
+
     try:
         import logfire
 
         logfire.configure()
-    except ImportError:
-        logger.remove()
-        logger.add(sys.stderr, colorize=True)
-    else:
-        logger.remove()
-        logger.add(sys.stderr, colorize=True)
         logger.add(logfire.loguru_handler())
+    except ImportError:
+        pass
 
 
 def create_cli_app() -> typer.Typer:
